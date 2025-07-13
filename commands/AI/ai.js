@@ -20,23 +20,25 @@ module.exports = {
   run: async (client, interaction) => {
 
     // API yanıtı gecikebileceği için Discord'a "düşünüyor..." durumu gönderiyoruz.
-    // Bu, komutun zaman aşımına uğramasını engeller.
     await interaction.deferReply();
 
     // Kullanıcının 'soru' seçeneğine girdiği metni alıyoruz.
     const soru = interaction.options.getString("soru");
 
     try {
-      // Belirtilen API adresine POST isteği gönderiyoruz.
-      const response = await fetch("https://api.gptgod.online/v1/chat/completions", {
+      // YENİ VE ÇALIŞAN API ADRESİ:
+      // Eskisi yerine daha stabil bir alternatif kullanıyoruz.
+      const response = await fetch("https://lpu.zeabur.app/v1/chat/completions", {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         // API'nin beklediği formatta gövde (body) hazırlıyoruz.
+        // Bu yapı OpenAI formatıyla uyumlu olduğu için değiştirmemize gerek yok.
         body: JSON.stringify({
           model: "gpt-3.5-turbo",
           messages: [{ role: "user", content: soru }],
+          temperature: 0.7 // Cevapların ne kadar "yaratıcı" olacağını belirler.
         })
       });
 
@@ -66,8 +68,7 @@ module.exports = {
       console.error("❌ | AI komutunda hata oluştu:", error);
 
       // Kullanıcıya da bir hata mesajı gönderiyoruz.
-      await interaction.editReply({ content: "❌ Bir şeyler ters gitti! Yapay zeka hizmetine ulaşılamıyor." });
+      await interaction.editReply({ content: "❌ Bir şeyler ters gitti! Yapay zeka hizmetine ulaşılamıyor veya bir hata döndürdü." });
     }
   },
 };
-        
