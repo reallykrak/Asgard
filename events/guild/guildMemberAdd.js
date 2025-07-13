@@ -2,19 +2,17 @@
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require("discord.js");
 const db = require("croxydb");
-const { generateCaptcha } = require("../../function/captchaGenerator"); // Captcha fonksiyonunu import ediyoruz
-const moment = require("moment"); // Zaman işlemleri için
+const { generateCaptcha } = require("../../function/captchaGenerator");
+const moment = require("moment");
 
 module.exports = {
   name: "guildMemberAdd",
   once: false,
   async execute(client, member) {
     const guildId = member.guild.id;
-    // Her iki sistemin ayarlarını da veritabanından çekelim
     const captchaSystem = db.get(`captchaSystem_${guildId}`);
     const registerSystem = db.get(`registerSystem_${guildId}`);
 
-    // ÖNCELİK 1: Captcha Sistemi Kontrolü
     if (captchaSystem) {
         const { channelId, unregisteredRoleId } = captchaSystem;
 
@@ -23,21 +21,28 @@ module.exports = {
 
         if (!channel || !unregisteredRole) {
             console.error(`[Captcha System] Hata: Kanal veya kayıtsız rolü bulunamadı. Sistem sıfırlanıyor: ${guildId}`);
-            db.delete(`captchaSystem_${guildId}`); // Hata durumunda ayarları temizle
+            db.delete(`captchaSystem_${guildId}`);
             return;
         }
 
         try {
             await member.roles.add(unregisteredRole);
             
-            const { captchaText, imageBuffer } = await generateCaptcha();
+            // Hesap yaşını hesapla ve zorluk seviyesini belirle
+            const accountAge = moment().diff(member.user.createdAt, 'days');
+            let difficulty = 'normal';
+            if (accountAge <= 7) {
+                difficulty = 'hard';
+            } else if (accountAge >= 2000) {
+                difficulty = 'easy';
+            } else if (accountAge >= 500 && accountAge <= 1000) {
+                difficulty = 'medium';
+            }
 
-            // Üyenin captcha kodunu veritabanına kaydet
+            const { captchaText, imageBuffer } = await generateCaptcha(difficulty);
+
             db.set(`captchaCode_${guildId}_${member.id}`, captchaText);
 
-            // Hesap Güvenliği Kontrolü
-            const accountCreationDate = moment(member.user.createdAt);
-            const accountAge = moment().diff(accountCreationDate, 'days');
             const securityStatus = accountAge < 15 ? "Şüpheli ❓" : "Güvenli ✅";
             
             const attachment = new AttachmentBuilder(imageBuffer, { name: 'captcha.png' });
@@ -46,12 +51,12 @@ module.exports = {
                 .setColor("Gold")
                 .setTitle(`Hoş Geldin, ${member.user.username}!`)
                 .setDescription(
-                    `Sunucumuza erişmek için lütfen aşağıdaki resimde görünen karakterleri girerek kendini doğrula.\n\n` +
+                    `Sunucumuza tam erişim sağlamak için lütfen aşağıdaki resimde gördüğün karakterleri girerek kendini doğrula.\n\n` +
                     `**Hesap Güvenlik Durumu:** ${securityStatus}\n` +
-                    `*(Hesap Oluşturma Tarihi: <t:${Math.floor(accountCreationDate.valueOf() / 1000)}:F>)*`
+                    `*(Hesap ${accountAge} gün önce <t:${Math.floor(member.user.createdAt / 1000)}:R> oluşturuldu.)*`
                 )
                 .setImage('attachment://captcha.png')
-                .setFooter({ text: "Doğrulama için butona tıkla."});
+                .setFooter({ text: "Doğrulama yapmak için aşağıdaki butona tıkla."});
 
             const row = new ActionRowBuilder()
                 .addComponents(
@@ -61,8 +66,8 @@ module.exports = {
                         .setStyle(ButtonStyle.Primary)
                 );
 
+            // "Hey @kullanıcı" metni kaldırıldı, sadece embed gönderiliyor.
             await channel.send({
-                content: `Hey ${member}!`,
                 embeds: [embed],
                 files: [attachment],
                 components: [row]
@@ -72,10 +77,9 @@ module.exports = {
             console.error("Captcha gönderilirken veya rol verilirken hata oluştu:", error);
         }
 
-    // ÖNCELİK 2: Kayıt Sistemi Kontrolü (Captcha yoksa çalışır)
     } else if (registerSystem) {
+      // Mevcut kayıt sisteminiz burada olduğu gibi çalışmaya devam eder.
       const { channelId, unregisteredRoleId, staffRoleId } = registerSystem;
-      
       const welcomeChannel = await member.guild.channels.fetch(channelId).catch(() => null);
       const unregisteredRole = await member.guild.roles.fetch(unregisteredRoleId).catch(() => null);
       const staffRole = await member.guild.roles.fetch(staffRoleId).catch(() => null);
@@ -102,31 +106,17 @@ module.exports = {
         
         const row = new ActionRowBuilder()
             .addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`normal_register_${member.id}`)
-                    .setLabel("Normal Register")
-                    .setStyle(ButtonStyle.Success)
-                    .setEmoji("👤"), 
-                new ButtonBuilder()
-                    .setCustomId(`manual_register_${member.id}`)
-                    .setLabel("Manual Register")
-                    .setStyle(ButtonStyle.Primary)
-                    .setEmoji("✍️"),
-                new ButtonBuilder()
-                    .setCustomId(`ai_register_${member.id}`)
-                    .setLabel("AI Register")
-                    .setStyle(ButtonStyle.Danger)
-                    .setEmoji("🤖")
+                new ButtonBuilder().setCustomId(`normal_register_${member.id}`).setLabel("Normal Register").setStyle(ButtonStyle.Success).setEmoji("👤"), 
+                new ButtonBuilder().setCustomId(`manual_register_${member.id}`).setLabel("Manual Register").setStyle(ButtonStyle.Primary).setEmoji("✍️"),
+                new ButtonBuilder().setCustomId(`ai_register_${member.id}`).setLabel("AI Register").setStyle(ButtonStyle.Danger).setEmoji("🤖")
             );
             
         const staffMention = staffRole ? `Hey ${staffRole}!` : "Hey Staff!";
-
         await welcomeChannel.send({ content: `${staffMention} - Welcome to the server, ${member}!`, embeds: [welcomeEmbed], components: [row] }).catch(console.error);
-
       } else {
         db.delete(`registerSystem_${guildId}`);
       }
     }
   },
 };
-              
+        
