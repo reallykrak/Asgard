@@ -66,7 +66,9 @@ async function generateCaptcha(difficulty = 'normal', width = 400, height = 150)
     
     // Captcha Metni
     const captchaText = generateRandomText(6);
-    ctx.font = 'bold 65px "DejaVu Sans"'; // Daha okunaklı ama zor bir font
+    // ----- DEĞİŞİKLİK BURADA YAPILDI -----
+    // "DejaVu Sans" yerine genel bir "sans-serif" fontu kullanılıyor.
+    ctx.font = 'bold 65px sans-serif'; 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
@@ -103,4 +105,4 @@ async function generateCaptcha(difficulty = 'normal', width = 400, height = 150)
 }
 
 module.exports = { generateCaptcha };
-                                                       
+         
